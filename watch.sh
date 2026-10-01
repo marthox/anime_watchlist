@@ -1,14 +1,24 @@
 #!/usr/bin/env bash
 # Usage: ./watch.sh <anime_slug>   (e.g. ./watch.sh hunter_x_hunter)
-#        ./watch.sh                (lists available animes)
+#        ./watch.sh                (pick an anime from a list)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ $# -lt 1 ]]; then
-  echo "Available animes:"
-  ls "$ROOT/animes"
-  exit 0
+  # No slug given: pick one from the list (fzf if available, else a numbered menu)
+  mapfile -t slugs < <(find "$ROOT/animes" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+  ((${#slugs[@]})) || {
+    echo "No animes in $ROOT/animes" >&2
+    exit 1
+  }
+  if command -v fzf >/dev/null; then
+    slug=$(printf '%s\n' "${slugs[@]}" | fzf --prompt="anime> " --height=40% --reverse) || exit 0
+  else
+    PS3="Pick an anime: "
+    select slug in "${slugs[@]}"; do [[ -n $slug ]] && break; done
+  fi
+  set -- "$slug"
 fi
 
 CONF="$ROOT/animes/$1/anime.conf"

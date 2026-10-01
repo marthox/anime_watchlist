@@ -18,15 +18,28 @@ brotherhood, I should be able to get inside the project and run the
 and it will instantly asked me if I want to watch the last episode, i.e
 the episode 7 or I want to go the next or the previous one.
 
+## Requirements
+
+| Tool | Needed by | Notes |
+| --- | --- | --- |
+| bash 4+ | `watch.sh`, `add.sh` | uses `mapfile`; any modern Linux/WSL has it |
+| [ani-cli](https://github.com/pystardust/ani-cli) | `watch.sh` | does the actual streaming; must be on your `PATH` (it brings its own player, e.g. mpv, and other dependencies, see its README) |
+| [fzf](https://github.com/junegunn/fzf) | `add.sh` (required), `watch.sh` (optional) | fuzzy picker; without it `watch.sh` falls back to a numbered menu |
+| curl | `add.sh` | fetches search results and episode counts |
+| coreutils, sed, grep, find | both scripts | standard on Linux/WSL |
+
+Make the scripts executable once: `chmod +x add.sh watch.sh`.
+
 ## Structure
 
-```
+```bash
 add.sh                                # search + add a new anime to the watchlist
 watch.sh                              # generic launcher
 animes/<slug>/anime.conf              # one config per anime
 ```
 
-Run `./watch.sh hunter_x_hunter` or `./watch.sh fullmetal_alchemist_brotherhood`.
+Run `./watch.sh` to pick an anime from a list (fzf, or a numbered menu if
+fzf isn't installed), or pass a slug directly: `./watch.sh hunter_x_hunter`.
 The script prints the exact command
 (e.g. `ani-cli -e 8 -S 1 -q best 'hunter x hunter 2011'`)
 and saves `EPISODE` back to the .conf after you confirm.
