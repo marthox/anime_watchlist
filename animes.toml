@@ -1,0 +1,24 @@
+
+[frieren_beyond_journey_s_end]
+name    = "Frieren: Beyond Journey's End"
+query   = "frieren"
+select  = 1
+mode    = "sub"
+quality = "best"
+total   = 28
+
+[fullmetal_alchemist_brotherhood]
+name    = "Fullmetal Alchemist: Brotherhood"
+query   = "fullmetal alchemist brotherhood"
+select  = 1
+mode    = "sub"
+quality = "best"
+total   = 64
+
+[hunter_x_hunter]
+name    = "Hunter x Hunter (2011)"
+query   = "hunter x hunter 2011"
+select  = 1
+mode    = "sub"
+quality = "best"
+total   = 148

@@ -1,0 +1,11 @@
+
+# downloaded stream segments are temporary and live outside the repo, but just in case
+*.ts
+*.part
+
+.venv/
+__pycache__/
+dist/
+
+# watch history is personal data, kept inside the project but out of git
+data/

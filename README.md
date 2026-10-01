@@ -6,60 +6,78 @@ tool, for anime watching using the command line interface
 
 ## How it works
 
-By using a .sh file and a related .conf file, I'll be ni-cli
-to make easier the process to continue an anime where it was
-left, the sh script will read the .conf file in order to create
-the execution command for the ani-cli tool to be able to start
-the new episode.
+`anime` is a small Python CLI on top of [ani-cli](https://github.com/pystardust/ani-cli).
+ani-cli does the hard part (searching the provider and resolving the stream); this
+project adds the watchlist around it:
 
-For example if I'm watching hunter x hunter, or fullmetal alchemist
-brotherhood, I should be able to get inside the project and run the
-.sh file related to the anime I want to watch, like ./hunterxhunter.sh,
-and it will instantly asked me if I want to watch the last episode, i.e
-the episode 7 or I want to go the next or the previous one.
+- **Shows** live in `animes.toml` (hand-editable, committed).
+- **History** lives in a SQLite database in `data/` (git-ignored), one row per watching
+  session with start, end, position and time actually spent playing, so it can
+  resume where you stopped and later feed per-day / per-week stats.
+- **Playback** goes through a local server (`player.py` / `stream.py`) that downloads
+  the stream's segments in parallel (the host caps each connection below playback
+  speed) and plays them in Windows VLC, polling VLC's web interface for the position.
 
 ## Requirements
 
-| Tool | Needed by | Notes |
-| --- | --- | --- |
-| bash 4+ | `watch.sh`, `add.sh` | uses `mapfile`; any modern Linux/WSL has it |
-| [ani-cli](https://github.com/pystardust/ani-cli) | `watch.sh` | does the actual streaming; must be on your `PATH` (it brings its own player, e.g. mpv, and other dependencies, see its README) |
-| [fzf](https://github.com/junegunn/fzf) | `add.sh` (required), `watch.sh` (optional) | fuzzy picker; without it `watch.sh` falls back to a numbered menu |
-| curl | `add.sh` | fetches search results and episode counts |
-| coreutils, sed, grep, find | both scripts | standard on Linux/WSL |
+| Tool | Notes |
+| --- | --- |
+| [uv](https://docs.astral.sh/uv/) | project and environment manager (`brew install uv`) |
+| [ani-cli](https://github.com/pystardust/ani-cli) | on your `PATH` |
+| [fzf](https://github.com/junegunn/fzf) | every picker in the CLI |
+| VLC for Windows | the player (WSL2); other players work but are not tracked |
 
-Make the scripts executable once: `chmod +x add.sh watch.sh`.
+Python 3.11+ and nothing else: the standard library covers the rest.
 
-## Structure
+## Usage
 
 ```bash
-add.sh                                # search + add a new anime to the watchlist
-watch.sh                              # generic launcher
-animes/<slug>/anime.conf              # one config per anime
+uv run anime add [search terms]    # search, pick a result, append it to animes.toml
+uv run anime watch [slug]          # pick a show (fzf) and an episode, then play
+uv run anime watch --no-auto       # don't auto-start the next episode
+uv run anime mark <slug> <ep>      # count an episode as watched without playing it
+uv run anime list                  # shows in animes.toml
 ```
 
-Run `./watch.sh` to pick an anime from a list (fzf, or a numbered menu if
-fzf isn't installed), or pass a slug directly: `./watch.sh hunter_x_hunter`.
-The script prints the exact command
-(e.g. `ani-cli -e 8 -S 1 -q best 'hunter x hunter 2011'`)
-and saves `EPISODE` back to the .conf after you confirm.
+`uv tool install --editable .` puts `anime` on your `PATH` so the `uv run` prefix isn't needed.
 
-## Config fields
+After an episode:
+- finishing it (95% or more, or VLC reaching the end) starts the next one after a
+  5-second countdown; Ctrl+C there opens the menu instead,
+- otherwise an fzf menu offers Resume / Next / Replay / Previous / Select episode / Quit.
 
-| Field | Meaning | ani-cli flag |
+Sessions under a minute of actual playback are discarded.
+
+## animes.toml
+
+```toml
+[hunter_x_hunter]            # the slug, used as `anime watch hunter_x_hunter`
+name    = "Hunter x Hunter (2011)"
+query   = "hunter x hunter 2011"   # search string passed to ani-cli
+select  = 1                        # -S: Nth search result
+mode    = "sub"                    # sub | dub
+quality = "best"
+total   = 148                      # 0 = unknown
+```
+
+`mode` and `quality` can be omitted, or set once in a `[defaults]` table.
+`select` stores the result's position, which matters when several results share a
+title (e.g. the two "Hunter x Hunter" series).
+
+## Data
+
+| Variable | Default | |
 | --- | --- | --- |
-| NAME | display name | – |
-| QUERY | search string | positional |
-| SELECT | Nth search result | `-S` |
-| MODE | `sub` / `dub` | `--dub` |
-| QUALITY | `best`, `720`, … | `-q` |
-| TOTAL | total episodes (0 = unknown) | – |
-| EPISODE | last watched episode | `-e` (next = EPISODE+1) |
+| `ANIME_DB` | `data/anime.db` in the project | SQLite history (git-ignored) |
+| `ANIME_HOME` | the repo root | where `animes.toml` is read from |
+| `ANI_PLAYER_BIN` | Windows VLC | player executable |
+| `ANI_PLAYER_ARGS` | – | extra player arguments |
+| `ANI_WORKERS` | `12` | parallel segment downloads |
 
-## Adding a new anime
+The `sessions` table, for the stats to come:
 
-`./add.sh [search terms]` searches (same source as ani-cli), lets you pick a
-result with fzf, and creates `animes/<slug>/anime.conf` with `EPISODE=0` and
-the total episode count. It does not start playback. `SELECT` stores the
-result's position, which matters when several results share a title (e.g.
-the two "Hunter x Hunter" series).
+```sql
+-- minutes watched per day
+SELECT date(started_at) AS day, SUM(watched_sec) / 60 AS minutes
+FROM sessions WHERE source = 'play' GROUP BY day ORDER BY day;
+```
